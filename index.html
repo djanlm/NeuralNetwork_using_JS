@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en" style="height:100%">
+
+<head>
+    <meta charSet="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="Artificial intelligence with Mihok from TorontoJS, building on basic knowledge we will discover and build Neural Networks from scratch to get a better understanding of how they work." />
+    <title>JS Workshop</title>
+    <script type="text/javascript" src="helpers/manifest.lib.js"></script>
+    <script type="text/javascript" src="helpers/math.lib.js"></script>
+    <script type="text/javascript" src="helpers/data.lib.js"></script>
+    <!-- Insert Live Editor here -->
+</head>
+
+<body>
+  <script type="text/javascript" src="helpers/renderers.lib.js"></script>
+  <script type="text/javascript">
+
+const B1 = 0;
+const B2 = 1;
+const B3 = 2;
+
+const W1 = 0;
+const W2 = 1;
+const W3 = 2;
+const W4 = 3;
+const W5 = 4;
+const W6 = 5;
+
+const H1 = 0;
+const H2 = 1;
+const O1 = 2;
+
+const I1 = 0;
+const I2 = 1;
+
+    //neuron network
+    class Network {
+      hidden;
+      output;
+      biases;
+      weights;
+
+      lossFn;
+
+      constructor(biases = [], weights = [], activatorFn, lossFn){
+        this.biases = biases;
+        this.weights = weights;
+        this.lossFn = lossFn;
+
+        const h1Weights = [this.weights[W1], this.weights[W2]];
+        const h2Weights = [this.weights[W3], this.weights[W4]];
+        const o1Weights = [this.weights[W5], this.weights[W6]];
+
+        this.hidden = [
+          new Neuron(biases[B1], h1Weights, activatorFn),
+          new Neuron(biases[B2], h2Weights, activatorFn),
+
+        ];
+
+        this.output =  new Neuron(biases[B3], o1Weights, activatorFn);
+      }
+
+      train (data=[], answers = [], iterations = 1000, rate = 0.1){
+        let weightMultiplier = [];
+        let biasMultiplier = [];
+        let lossData = [];
+
+        for (let i = 0; i<iterations; i++){
+          for(let d = 0; d < data.length; d++){
+            let h1Sum = this.hidden[H1].sum(data[d]);
+            let h1 = this.hidden[H1].activatorFn(h1Sum);
+
+            let h2Sum = this.hidden[H2].sum(data[d]);
+            let h2 = this.hidden[H2].activatorFn(h2Sum);
+
+            let o1Sum = this.output.sum([h1,h2]);
+            let o1 = this.output.activatorFn(o1Sum);
+
+            let pred = o1;
+
+            // Weight multiplier + update weights
+            weightMultiplier[W1] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.outputPartialDeriv(this.weights[W5], o1Sum),
+              Trainer.hiddenPartialDeriv(data[d][I1], h1Sum),
+
+            );
+
+            this.weights[W1]= this.weights[W1] - (rate * weightMultiplier[W1]);
+
+            weightMultiplier[W2] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.outputPartialDeriv(this.weights[W5], o1Sum),
+              Trainer.hiddenPartialDeriv(data[d][I2], h1Sum),
+            );
+            this.weights[W2]= this.weights[W2] - (rate * weightMultiplier[W2]);
+
+            weightMultiplier[W3] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.outputPartialDeriv(this.weights[W6], o1Sum),
+              Trainer.hiddenPartialDeriv(data[d][I1], h2Sum),
+            );
+            this.weights[W3]= this.weights[W3] - (rate * weightMultiplier[W3]);
+
+            weightMultiplier[W4] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.outputPartialDeriv(this.weights[W6], o1Sum),
+              Trainer.hiddenPartialDeriv(data[d][I2], h2Sum),
+            );
+            this.weights[W4]= this.weights[W4] - (rate * weightMultiplier[W4]);
+
+            weightMultiplier[W5] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.outputPartialDeriv(h1, o1Sum),
+            );
+            this.weights[W5]= this.weights[W5] - (rate * weightMultiplier[W5]);
+
+            weightMultiplier[W6] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.outputPartialDeriv(h2, o1Sum),
+            );
+            this.weights[W6]= this.weights[W6] - (rate * weightMultiplier[W6]);
+
+            //update bias multiplier and biases
+
+            biasMultiplier[H1] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.hiddenPartialDeriv(this.weights[W5], o1Sum),
+              Math.derivSigmoid(h1Sum),
+            );
+
+            this.biases[H1] = this.biases[H1] - (rate * biasMultiplier[H1]);
+
+            biasMultiplier[H2] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Trainer.hiddenPartialDeriv(this.weights[W6], o1Sum),
+              Math.derivSigmoid(h2Sum),
+            );
+
+            this.biases[H2] = this.biases[H2] - (rate * biasMultiplier[H2]);
+
+            biasMultiplier[O1] = Trainer.multiply(
+              Trainer.lossPartialDeriv(answers[d], pred),
+              Math.derivSigmoid(h1Sum),
+            );
+
+            this.biases[O1] = this.biases[O1] - (rate * biasMultiplier[O1]);
+
+            this.reload();
+          }
+
+          if(i%10 === 0 ){
+            let currentPrediction = [];
+            data.forEach((row)=>{
+              currentPrediction.push(this.query(row));
+            });
+
+            let loss = this.lossFn(answers, currentPrediction);
+
+            lossData.push(loss);
+            console.log(`Iteration ${i}, loss: ${loss}`);
+          }
+        }
+
+        console.graph(lossData);
+      }
+
+      reload(){
+        this.hidden[H1].weights = [
+          this.weights[W1],
+          this.weights[W2],
+        ];
+
+        this.hidden[H1].bias = this.biases[B1];
+
+        this.hidden[H2].weights = [
+          this.weights[W3],
+          this.weights[W4],
+        ];
+
+        this.hidden[H2].bias = this.biases[B2];
+        
+        this.output.weights = [
+          this.weights[W5],
+          this.weights[W6],
+        ];
+
+        this.output.bias = this.biases[B3];
+      }
+
+      query(inputs = []){
+        let params = [];
+
+        for(let h=0; h<this.hidden.length; h++){
+          params.push(this.hidden[h].activate(inputs));
+        }
+
+        return this.output.activate(params);
+      }
+    }
+
+    //neuron
+    class Neuron{
+      bias;
+      weights;
+      activatorFn = function (x) {throw new Error('not implemented');}
+      
+      constructor (bias = 0,weights =[], activatorFn){
+        this.bias = bias;
+        this.weights = weights;
+        this.activatorFn = activatorFn;
+      }
+
+      sum (inputs = []){
+        let output = 0;
+        let buffer = [];
+        for (let i=0; i<inputs.length; i++){
+          buffer[i] = inputs[i] * this.weights[i];
+        }
+
+        for(let b=0; b<buffer.length; b++){
+          output = output +buffer[b];
+        }
+
+        output = output + this.bias;
+        return output;
+      }
+
+    //activates the neuron
+      activate (inputs=[]){
+       let output = this.sum(inputs);
+       let result = this.activatorFn(output);
+       return result;
+      }
+    
+    }
+
+    const b=[0, 0, 0];
+    const w = [1, 1, 1, 1, 1, 1];
+
+    const weightShift = shifter(135);
+    const heightShift = shifter(66);
+    const data = [];
+    const answers = [];
+
+    for(let d=0; d<DATA.whg.length; d++){
+        data.push([
+          weightShift(DATA.whg[d].weight),
+          heightShift(DATA.whg[d].height),
+        ]);
+
+        answers.push(DATA.whg[d].gender);
+    }
+
+    console.log('Neural Network start')
+    const nn = new Network(b, w, Math.sigmoid, Math.meanSquaredError);
+    
+    nn.train(data,answers);
+
+    
+
+  </script>
+</body>
+
+</html>
